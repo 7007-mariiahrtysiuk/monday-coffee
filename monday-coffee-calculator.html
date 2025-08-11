@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monday Coffee Calculator ☕</title>
+<meta name="description" content="How much coffee will it take to survive today? Quick, fun calculator with a shareable result card.">
+<style>
+:root{
+  --bg:#0f1226; --card:#181b39; --muted:#b7c0ff; --text:#e8ebff;
+  --a1:#6c63ff; --a2:#ff6584; --a3:#00e0b8; --radius:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:linear-gradient(135deg,#0f1226,#131735 40%,#0d0f22);color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.container{max-width:980px;margin:18px auto;padding:0 16px 60px}
+.header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.badge{width:36px;height:36px;border-radius:10px;background: conic-gradient(from 210deg,var(--a1),var(--a2),var(--a3),var(--a1)); box-shadow:0 10px 22px rgba(0,0,0,.3)}
+h1{margin:6px 0 4px;font-size:26px}
+p{margin:4px 0 10px;color:var(--muted)}
+.card{background:linear-gradient(180deg,#1a1f48,#141735);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);
+  box-shadow:0 10px 30px rgba(0,0,0,.3);padding:16px}
+.grid{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
+@media (max-width:900px){.grid{grid-template-columns:1fr} }
+label{font-size:14px;color:var(--muted);display:block;margin:8px 0 6px}
+input[type="number"],select{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+  background:#101333;color:var(--text)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:12px;border:none;
+  color:#fff;font-weight:700;cursor:pointer;user-select:none}
+.btn:active{transform:translateY(1px) scale(.99)}
+.btn-primary{background:linear-gradient(135deg,var(--a1),var(--a2));box-shadow:0 10px 25px rgba(108,99,255,.35)}
+.btn-secondary{background:linear-gradient(135deg,#2b305f,#212652)}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.12)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.small{font-size:12px;color:#cbd1ff}
+canvas{width:100%;height:auto;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#000}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1b224d;color:#fff;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:14px;display:none;z-index:9999}
+.footer{margin-top:14px;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="badge"></div>
+    <div>
+      <h1>Monday Coffee Calculator ☕</h1>
+      <div class="small">How much coffee will it take to survive today?</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <label for="tasks">How many tasks are on your plate today?</label>
+      <input id="tasks" type="number" min="0" max="99" value="7" inputmode="numeric">
+
+      <label for="complexity">How spicy are those tasks?</label>
+      <select id="complexity">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="nightmare">Nightmare 😵‍💫</option>
+      </select>
+
+      <label for="energy">Energy level right now</label>
+      <select id="energy">
+        <option value="high">High</option>
+        <option value="okay" selected>Okay</option>
+        <option value="low">Low 😴</option>
+      </select>
+
+      <div class="row" style="margin-top:12px">
+        <button class="btn btn-primary" id="calc">☕ Calculate</button>
+        <button class="btn btn-secondary" id="download" disabled>📥 Download result card</button>
+        <button class="btn btn-ghost" id="copy">📋 Copy LinkedIn caption</button>
+      </div>
+
+      <p class="small">Totally scientific.* *Not scientific at all.</p>
+    </div>
+
+    <div class="card">
+      <canvas id="card" width="1200" height="627" aria-label="Result card"></canvas>
+      <div class="small" style="margin-top:8px">Watermark: Made by Mariia Hrytsiuk | linkedin.com/in/mariia-h-1b93a8153</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Part of <em>Mariia’s Friday Fun Tools</em> — Try the <a href="index.html">Risky Memes</a> →
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const WM = "Made by Mariia Hrytsiuk | linkedin.com/in/mariia-h-1b93a8153";
+const card = document.getElementById('card');
+const ctx = card.getContext('2d');
+
+function showToast(msg){
+  const t = document.getElementById('toast'); t.textContent = msg; t.style.display='block';
+  setTimeout(()=>t.style.display='none', 2200);
+}
+
+// Compute cups needed (fun formula)
+function computeCups(tasks, complexity, energy){
+  const cFactor = {easy:0.7, medium:1.0, nightmare:1.45}[complexity] || 1.0;
+  const eFactor = {high:0.7, okay:1.0, low:1.25}[energy] || 1.0;
+  let raw = (tasks * 0.35) * cFactor * eFactor + 1; // baseline + task factor
+  // Clamp 0.5 .. 6.5, then round to nearest 0.5 cup
+  raw = Math.max(0.5, Math.min(6.5, raw));
+  return Math.round(raw*2)/2;
+}
+
+function quip(cups){
+  if(cups <= 1) return "You’re basically solar powered today.";
+  if(cups <= 2) return "Balanced. Caffeinate responsibly.";
+  if(cups <= 3) return "Medium roast, maximum focus.";
+  if(cups <= 4) return "Proceed with espresso.";
+  if(cups <= 5) return "Alert level: jittery.";
+  return "Legally a coffee machine now.";
+}
+
+function captionText(tasks, complexity, energy, cups){
+  const title = "Monday Coffee Calculator ☕";
+  const line1 = `Tasks: ${tasks} • Complexity: ${complexity} • Energy: ${energy}`;
+  const line2 = `Estimated fuel: ${cups} cup${cups===1?'':'s'}`;
+  const line3 = quip(cups);
+  return `${title}\n${line1}\n${line2}\n${line3}\n\n(Free tool)\n#coffee #monday #productivity #fun #projectmanagement`;
+}
+
+// Draw result card
+function drawCard(tasks, complexity, energy, cups){
+  // gradient bg
+  const g = ctx.createLinearGradient(0,0,card.width,card.height);
+  g.addColorStop(0,"#3b2dbd"); g.addColorStop(.5,"#ff6584"); g.addColorStop(1,"#00e0b8");
+  ctx.fillStyle = g; ctx.fillRect(0,0,card.width,card.height);
+
+  // frame
+  ctx.strokeStyle="rgba(255,255,255,.85)"; ctx.lineWidth=8; ctx.strokeRect(30,30,card.width-60, card.height-60);
+
+  // title
+  ctx.fillStyle="#fff"; ctx.textAlign="left"; ctx.textBaseline="top";
+  ctx.font="900 52px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText("Monday Coffee Calculator", 60, 60);
+
+  // details
+  ctx.font="bold 32px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText(`Tasks: ${tasks}   •   Complexity: ${complexity}   •   Energy: ${energy}`, 60, 130);
+
+  // big number
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.font="900 160px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText(`${cups}`, card.width/2, card.height/2 - 10);
+
+  // label
+  ctx.font="bold 40px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText(`cup${cups===1?'':'s'} today`, card.width/2, card.height/2 + 90);
+
+  // little cup emoji
+  ctx.font="bold 64px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText("☕", card.width/2, card.height/2 + 160);
+
+  // quip
+  ctx.textAlign="left"; ctx.textBaseline="bottom";
+  ctx.font="bold 34px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText(quip(cups), 60, card.height-120);
+
+  // watermark
+  ctx.textAlign="right"; ctx.font="600 28px ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial";
+  ctx.fillText(WM, card.width-40, card.height-40);
+}
+
+function calculate(){
+  const tasks = Math.max(0, Math.min(99, parseInt(document.getElementById('tasks').value || "0", 10)));
+  const complexity = document.getElementById('complexity').value;
+  const energy = document.getElementById('energy').value;
+  const cups = computeCups(tasks, complexity, energy);
+  drawCard(tasks, complexity, energy, cups);
+
+  const dl = document.getElementById('download');
+  dl.disabled = false;
+  dl.onclick = ()=>{
+    const a = document.createElement('a');
+    a.download = "monday-coffee-card.png";
+    a.href = card.toDataURL("image/png");
+    a.click();
+  };
+
+  document.getElementById('copy').onclick = async ()=>{
+    try{
+      await navigator.clipboard.writeText(captionText(tasks, complexity, energy, cups));
+      showToast("Caption copied!");
+    }catch(e){
+      showToast("Could not copy. Long-press to select text.");
+    }
+  };
+
+  showToast(`Estimated: ${cups} cup${cups===1?'':'s'}`);
+}
+
+// Initial draw (demo state)
+drawCard(7,"medium","okay", computeCups(7,"medium","okay"));
+
+document.getElementById('calc').addEventListener('click', calculate);
+</script>
+</body>
+</html>
